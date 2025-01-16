@@ -7,13 +7,14 @@ import (
 	"net/http"
 	"outline-to-ggdocs/config"
 	"outline-to-ggdocs/constants"
+	"outline-to-ggdocs/utils"
 )
 
-func ExportCollectionsCommand(id string) {
+func ExportCollection(id string) map[string]interface{} {
 	if id == "" {
-		fmt.Println("Exporting all collections...")
+		utils.LogInfo("Exporting all collections...")
 	} else {
-		fmt.Println("Exporting collection with ID:", id)
+		utils.LogInfo(fmt.Sprint("Exporting collection with ID:", id))
 	}
 
 	apiUrl := constants.OutlineApiCollectionsExportAll
@@ -46,22 +47,26 @@ func ExportCollectionsCommand(id string) {
 	var bodyMap map[string]interface{}
 	err = json.NewDecoder(resp.Body).Decode(&bodyMap)
 
-	if resp.StatusCode != 200 {
-		panic("Failed to export collections")
-	}
-
 	if err != nil {
 		panic(err)
 	}
 
+	if resp.StatusCode != 200 {
+		utils.LogError("failed to export collections.")
+		utils.LogError("Header: " + fmt.Sprint(resp.Header))
+		utils.LogError("Body: " + fmt.Sprint(bodyMap))
+		panic("failed to export collections")
+	}
+
 	data := bodyMap["data"].(map[string]interface{})
+	return data
+}
+
+func ExportCollectionsCommand(id string) {
+	data := ExportCollection(id)
 	fileOperationId := data["fileOperation"].(map[string]interface{})["id"].(string)
 	fmt.Println("Export requested, File operation ID:", fileOperationId)
-	fmt.Print("Download file? (y/n) ")
-	var download string
-	fmt.Scanln(&download)
-	if download != "y" {
-		return
+	if utils.ShouldProceedInput("Download file? (y/n) ") {
+		DownloadFile(fileOperationId, "./")
 	}
-	DownloadFile(fileOperationId)
 }

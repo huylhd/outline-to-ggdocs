@@ -2,15 +2,14 @@ package utils
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
 	"sync"
 )
 
-func ConvertMarkdownToGoogleDocs(filePath string, removeMd bool, wg *sync.WaitGroup, errors chan error) {
-	defer wg.Done()
-
+func ConvertMarkdownToGoogleDocs(filePath string, removeMd bool, errors chan error) {
 	newFilePath := strings.Replace(filePath, ".md", ".docx", 1)
 	cmd := exec.Command("pandoc", "-f", "markdown", "-t", "docx", filePath, "-o", newFilePath)
 	if err := cmd.Run(); err != nil {
@@ -47,9 +46,28 @@ func ConvertMarkdownInDirectoryToGoogleDocs(directoryPath string, removeMd bool)
 		}
 		wg.Add(1)
 		go func(file os.DirEntry) {
+			defer wg.Done()
+			defer func() {
+				<-pool
+			}()
+			fmt.Println(file.Name(), directoryPath+"/"+file.Name())
 			pool <- struct{}{}
-			ConvertMarkdownToGoogleDocs(directoryPath+"/"+file.Name(), removeMd, &wg, errors)
-			<-pool
+
+			content, err := os.ReadFile(directoryPath + "/" + file.Name())
+			if err != nil {
+				fmt.Println(err)
+				errors <- err
+				return
+			}
+			// Replace the "uploads/*"" in file content with the relative path
+			newContent := strings.ReplaceAll(string(content), "uploads/", escapePath("./"+directoryPath+"/uploads/"))
+			if err := os.WriteFile(directoryPath+"/"+file.Name(), []byte(newContent), 0644); err != nil {
+				fmt.Println(err)
+				errors <- err
+				return
+			}
+
+			ConvertMarkdownToGoogleDocs(directoryPath+"/"+file.Name(), removeMd, errors)
 		}(file)
 	}
 
@@ -58,4 +76,8 @@ func ConvertMarkdownInDirectoryToGoogleDocs(directoryPath string, removeMd bool)
 	for err := range errors {
 		fmt.Println(err)
 	}
+}
+
+func escapePath(path string) string {
+	return url.PathEscape(path)
 }

@@ -10,8 +10,8 @@ import (
 	"strings"
 )
 
-func ListCollectionsCommand(page int) {
-	payloadString := `{"limit": 100, "offset": ` + fmt.Sprint((page-1)*100) + `}`
+func ListCollections(page int) []interface{} {
+	payloadString := `{"limit": 50, "offset": ` + fmt.Sprint((page-1)*100) + `}`
 	req, err := http.NewRequest("POST", constants.OutlineApiCollectionsList, strings.NewReader(payloadString))
 	if err != nil {
 		panic(err)
@@ -26,10 +26,6 @@ func ListCollectionsCommand(page int) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		panic("Failed to fetch collections")
-	}
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		panic(err)
@@ -41,7 +37,16 @@ func ListCollectionsCommand(page int) {
 		panic(err)
 	}
 
+	if resp.StatusCode != 200 {
+		panic(fmt.Sprintf("Failed to fetch collections %s \n", bodyMap))
+	}
+
 	collections := bodyMap["data"].([]interface{})
+	return collections
+}
+
+func ListCollectionsCommand(page int) {
+	collections := ListCollections(page)
 	if len(collections) == 0 {
 		fmt.Println("No collections found")
 		return

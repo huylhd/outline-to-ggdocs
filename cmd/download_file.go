@@ -9,6 +9,7 @@ import (
 	"os"
 	"outline-to-ggdocs/config"
 	"outline-to-ggdocs/constants"
+	"outline-to-ggdocs/utils"
 	"strings"
 	"time"
 )
@@ -30,7 +31,7 @@ func isFileReady(id string) (bool, string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		panic("Failed to fetch file info")
+		panic("failed to fetch file info")
 	}
 
 	var bodyMap map[string]interface{}
@@ -50,16 +51,18 @@ func isFileReady(id string) (bool, string, error) {
 	return false, "", errors.New("get file operation failed")
 }
 
-func DownloadFile(id string) {
+func DownloadFile(id string, rootDir string) string {
 	if id == "" {
-		panic("Error: id is required")
+		panic("id is required")
 	}
 
+	filePath := rootDir
 	for {
-		fmt.Println("Retrieving file status...")
+		fmt.Printf("Retrieving file %s status...\n", id)
 		ready, collectionName, err := isFileReady(id)
 		if err != nil {
-			panic(err)
+			utils.LogError(fmt.Sprintf("Error retrieving file %s status: %s", id, err))
+			break
 		}
 		if !ready {
 			fmt.Println("File is not ready yet, retrying in 5 seconds...")
@@ -70,36 +73,47 @@ func DownloadFile(id string) {
 		payloadString := `{"id": "` + id + `"}`
 		req, err := http.NewRequest("POST", constants.OutlineApiFileOperationsDownload, strings.NewReader(payloadString))
 		if err != nil {
-			panic(err)
+			utils.LogError(fmt.Sprintf("Error creating request for file %s: %s", id, err))
+			break
 		}
 
 		req.Header.Add("Authorization", "Bearer "+config.AppConfig.OutlineApiKey)
 		req.Header.Add("Content-Type", "application/json")
 
-		client := &http.Client{}
+		client := &http.Client{
+			Timeout: 300 * time.Second,
+		}
 		resp, err := client.Do(req)
 		if err != nil {
-			panic(err)
+			utils.LogError(fmt.Sprintf("Error downloading file %s: %s", id, err))
+			break
 		}
 		defer resp.Body.Close()
 
+		filePath += "/" + fmt.Sprintf("%s.zip", collectionName)
 		if resp.StatusCode == 200 {
-			file, err := os.Create(fmt.Sprintf("%s.zip", collectionName))
+			fmt.Printf("Downloading file %s \n", id)
+			file, err := os.Create(filePath)
 			if err != nil {
-				panic(err)
+				utils.LogError(fmt.Sprintf("Error creating file %s: %s", filePath, err))
+				break
 			}
 			defer file.Close()
 
-			_, err = io.Copy(file, resp.Body)
+			buf := make([]byte, 1024*32)
+			_, err = io.CopyBuffer(file, resp.Body, buf)
 			if err != nil {
-				panic(err)
+				utils.LogError(fmt.Sprintf("Error writing file %s: %s", filePath, err))
+				break
 			}
 
-			fmt.Println("Download completed")
+			utils.LogInfo(fmt.Sprintf("Download file %s completed \n", id))
 			break
 		}
 
-		fmt.Println("Download failed")
-		os.Exit(1)
+		utils.LogError(fmt.Sprintf("Download file %s failed \n", id))
+		break
 	}
+
+	return filePath
 }

@@ -6,6 +6,7 @@ import (
 	"os"
 	"outline-to-ggdocs/cmd"
 	"outline-to-ggdocs/config"
+	"outline-to-ggdocs/utils"
 )
 
 func main() {
@@ -18,6 +19,7 @@ func main() {
 		fmt.Println("  export - Export a collection (or all without id)")
 		fmt.Println("  download - Download a file")
 		fmt.Println("  convert - Convert all markdown files in a directory to .docx")
+		fmt.Println("  do_all - Export all collections")
 		fmt.Println("\nRun 'outline-to-ggdocs <command> --help' to see more details about a specific command.")
 	}
 
@@ -30,7 +32,7 @@ func main() {
 	}
 
 	if len(args) < 1 {
-		fmt.Println("Error: command is required")
+		utils.LogError("command is required")
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -38,7 +40,7 @@ func main() {
 	outlineApiKey := config.AppConfig.OutlineApiKey
 
 	if outlineApiKey == "" {
-		fmt.Println("Error: OUTLINE_API_KEY is required")
+		utils.LogError("OUTLINE_API_KEY is required")
 		os.Exit(1)
 	}
 
@@ -46,10 +48,11 @@ func main() {
 	exportCmd := flag.NewFlagSet("export", flag.ExitOnError)
 	downloadCmd := flag.NewFlagSet("download", flag.ExitOnError)
 	convertCmd := flag.NewFlagSet("convert", flag.ExitOnError)
+	automateCmd := flag.NewFlagSet("automate", flag.ExitOnError)
 
 	switch args[0] {
 	case "list":
-		page := listCmd.Int("page", 1, "Page number")
+		page := listCmd.Int("page", 1, "Page number, starts from 1")
 		listCmd.Parse(args[1:])
 
 		cmd.ListCollectionsCommand(*page)
@@ -64,20 +67,33 @@ func main() {
 		downloadID := downloadCmd.String("id", "", "File ID")
 		downloadCmd.Parse(args[1:])
 
-		cmd.DownloadFile(*downloadID)
+		cmd.DownloadFile(*downloadID, "./")
 
 	case "convert":
 		dir := convertCmd.String("dir", "", "Directory path")
-		removeMd := convertCmd.Bool("removemd", false, "Remove markdown files after conversion")
+		removeMd := convertCmd.Bool("remove-md", false, "Remove markdown files after conversion")
 		convertCmd.Parse(args[1:])
 
 		if *dir == "" {
-			fmt.Println("Error: directory path is required")
+			utils.LogError("directory path is required")
 			os.Exit(1)
 		}
 		cmd.ConvertDirectory(*dir, *removeMd)
 
+	case "automate":
+		page := automateCmd.Int("page", 0, "Page number, starts from 1 (leave empty to fetch all collections)")
+		fromStep := automateCmd.Int("from-step", 0, "Step to start from. 0 = list, 1 = export, 2 = download and convert")
+		automateCmd.Parse(args[1:])
+
+		fromAutomateStep := cmd.AutomateStep(*fromStep)
+		if fromAutomateStep < cmd.STEP_LIST || fromAutomateStep > cmd.STEP_DOWNLOAD_UNZIP_CONVERT {
+			utils.LogError("invalid from-step value")
+			os.Exit(1)
+		}
+
+		cmd.AutomateCommand(*page, fromAutomateStep)
+
 	default:
-		fmt.Println("Error: command not found")
+		utils.LogError("command not found")
 	}
 }

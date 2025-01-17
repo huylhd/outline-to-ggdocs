@@ -88,8 +88,7 @@ func listAllCollections(p int) []interface{} {
 }
 
 func stepExport() {
-	var collectionsData []map[string]interface{}
-	collectionsData = readCollectionsData()
+	collectionsData := readCollectionsData()
 	if len(collectionsData) == 0 {
 		utils.LogError("no collections found in collections.json")
 		os.Exit(0)
@@ -147,6 +146,7 @@ func stepDownloadAndUnzip() {
 	if err != nil {
 		panic(err)
 	}
+	defer file.Close()
 
 	var fileOperationIds []string
 	err = json.NewDecoder(file).Decode(&fileOperationIds)
@@ -158,13 +158,16 @@ func stepDownloadAndUnzip() {
 	var wg sync.WaitGroup
 	for _, fileId := range fileOperationIds {
 		wg.Add(1)
-		go func() {
+		go func(fileId string) {
 			defer wg.Done()
-			filePath := DownloadFile(fileId, "exports")
+			filePath, err := DownloadFile(fileId, "exports")
+			if err != nil {
+				return
+			}
 			targetPath := "exports"
 			utils.Unzip(filePath, targetPath)
 			utils.ConvertMarkdownInDirectoryToGoogleDocs(targetPath, true)
-		}()
+		}(fileId)
 	}
 
 	wg.Wait()

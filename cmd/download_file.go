@@ -51,12 +51,13 @@ func isFileReady(id string) (bool, string, error) {
 	return false, "", errors.New("get file operation failed")
 }
 
-func DownloadFile(id string, rootDir string) string {
+func DownloadFile(id string, rootDir string) (string, error) {
 	if id == "" {
 		panic("id is required")
 	}
 
-	filePath := rootDir
+	success := false
+	filePath := ""
 	for {
 		fmt.Printf("Retrieving file %s status...\n", id)
 		ready, collectionName, err := isFileReady(id)
@@ -90,24 +91,33 @@ func DownloadFile(id string, rootDir string) string {
 		}
 		defer resp.Body.Close()
 
-		filePath += "/" + fmt.Sprintf("%s.zip", collectionName)
+		cleanedCollectionName := strings.ReplaceAll(collectionName, "/", "_")
+		filePath += rootDir + "/" + fmt.Sprintf("%s.zip", cleanedCollectionName)
 		if resp.StatusCode == 200 {
-			fmt.Printf("Downloading file %s \n", id)
-			file, err := os.Create(filePath)
-			if err != nil {
-				utils.LogError(fmt.Sprintf("Error creating file %s: %s", filePath, err))
-				break
-			}
-			defer file.Close()
+			err := func() error {
+				fmt.Printf("Downloading file %s \n", id)
+				file, err := os.Create(filePath)
+				if err != nil {
+					utils.LogError(fmt.Sprintf("Error creating file %s: %s", filePath, err))
+					return err
+				}
+				defer file.Close()
 
-			buf := make([]byte, 1024*32)
-			_, err = io.CopyBuffer(file, resp.Body, buf)
+				buf := make([]byte, 1024*32)
+				_, err = io.CopyBuffer(file, resp.Body, buf)
+				if err != nil {
+					utils.LogError(fmt.Sprintf("Error downloading file %s: %s", id, err))
+					return err
+				}
+				return nil
+			}()
+
 			if err != nil {
-				utils.LogError(fmt.Sprintf("Error writing file %s: %s", filePath, err))
 				break
 			}
 
 			utils.LogInfo(fmt.Sprintf("Download file %s completed \n", id))
+			success = true
 			break
 		}
 
@@ -115,5 +125,8 @@ func DownloadFile(id string, rootDir string) string {
 		break
 	}
 
-	return filePath
+	if !success {
+		return "", errors.New("failed to download file")
+	}
+	return filePath, nil
 }

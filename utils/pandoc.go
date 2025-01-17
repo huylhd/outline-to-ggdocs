@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
 )
@@ -12,8 +13,9 @@ import (
 func ConvertMarkdownToGoogleDocs(filePath string, removeMd bool, errors chan error) {
 	newFilePath := strings.Replace(filePath, ".md", ".docx", 1)
 	cmd := exec.Command("pandoc", "-f", "markdown", "-t", "docx", filePath, "-o", newFilePath)
-	if err := cmd.Run(); err != nil {
-		errors <- err
+	cmdOutput, err := cmd.CombinedOutput()
+	if err != nil {
+		errors <- fmt.Errorf("pandoc failed: %v\nOutput: %s", err, string(cmdOutput))
 		return
 	}
 
@@ -28,14 +30,15 @@ func ConvertMarkdownToGoogleDocs(filePath string, removeMd bool, errors chan err
 }
 
 func ConvertMarkdownInDirectoryToGoogleDocs(directoryPath string, removeMd bool) {
+	LogInfo("Converting markdown files in " + directoryPath)
 	files, err := os.ReadDir(directoryPath)
 	if err != nil {
 		panic(err)
 	}
 
 	var wg sync.WaitGroup
-	errors := make(chan error)
-	pool := make(chan struct{}, 5)
+	errors := make(chan error, len(files))
+	pool := make(chan struct{}, runtime.NumCPU())
 	for _, file := range files {
 		if file.IsDir() {
 			ConvertMarkdownInDirectoryToGoogleDocs(directoryPath+"/"+file.Name(), removeMd)
@@ -50,9 +53,9 @@ func ConvertMarkdownInDirectoryToGoogleDocs(directoryPath string, removeMd bool)
 			defer func() {
 				<-pool
 			}()
-			fmt.Println(file.Name(), directoryPath+"/"+file.Name())
 			pool <- struct{}{}
 
+			fmt.Println(file.Name(), directoryPath+"/"+file.Name())
 			content, err := os.ReadFile(directoryPath + "/" + file.Name())
 			if err != nil {
 				fmt.Println(err)
@@ -74,7 +77,7 @@ func ConvertMarkdownInDirectoryToGoogleDocs(directoryPath string, removeMd bool)
 	wg.Wait()
 	close(errors)
 	for err := range errors {
-		fmt.Println(err)
+		LogError(fmt.Sprint(err))
 	}
 }
 

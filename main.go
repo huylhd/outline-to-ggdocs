@@ -19,7 +19,7 @@ func main() {
 		fmt.Println("  export - Export a collection (or all without id)")
 		fmt.Println("  download - Download a file")
 		fmt.Println("  convert - Convert all markdown files in a directory to .docx")
-		fmt.Println("  do_all - Export all collections")
+		fmt.Println("  automate - Automate the entire process")
 		fmt.Println("\nRun 'outline-to-ggdocs <command> --help' to see more details about a specific command.")
 	}
 

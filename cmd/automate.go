@@ -94,30 +94,35 @@ func stepExport() {
 		os.Exit(0)
 	}
 	var wg sync.WaitGroup
-	ch := make(chan string, len(collectionsData))
+	ch := make(chan map[string]interface{}, len(collectionsData))
 	for _, c := range collectionsData {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			data := ExportCollection(c["id"].(string))
 			fileOperationId := data["fileOperation"].(map[string]interface{})["id"].(string)
-			ch <- fileOperationId
+			fileOperationData := map[string]interface{}{
+				"id":           fileOperationId,
+				"name":         c["name"].(string),
+				"collectionId": c["id"].(string),
+			}
+			ch <- fileOperationData
 		}()
 	}
 
 	wg.Wait()
 	close(ch)
-	fileOperationIds := make([]string, 0)
-	for fileOperationId := range ch {
-		fileOperationIds = append(fileOperationIds, fileOperationId)
+	fileOperationData := make([]map[string]interface{}, 0)
+	for i := range ch {
+		fileOperationData = append(fileOperationData, i)
 	}
-	file, err := os.Create("fileOperationIds.json")
+	file, err := os.Create("fileOperations.json")
 	if err != nil {
 		panic(err)
 	}
 	defer file.Close()
 
-	jsonData, err := json.MarshalIndent(fileOperationIds, "", "  ")
+	jsonData, err := json.MarshalIndent(fileOperationData, "", "  ")
 	if err != nil {
 		panic(err)
 	}
@@ -142,22 +147,23 @@ func readCollectionsData() []map[string]interface{} {
 }
 
 func stepDownloadAndUnzip() {
-	file, err := os.Open("fileOperationIds.json")
+	file, err := os.Open("fileOperations.json")
 	if err != nil {
 		panic(err)
 	}
 	defer file.Close()
 
-	var fileOperationIds []string
-	err = json.NewDecoder(file).Decode(&fileOperationIds)
+	var fileOperationData []map[string]interface{}
+	err = json.NewDecoder(file).Decode(&fileOperationData)
 	if err != nil {
 		panic(err)
 	}
 
 	os.Mkdir("exports", 0755)
 	var wg sync.WaitGroup
-	for _, fileId := range fileOperationIds {
+	for _, i := range fileOperationData {
 		wg.Add(1)
+		fileId := i["id"].(string)
 		go func(fileId string) {
 			defer wg.Done()
 			filePath, err := DownloadFile(fileId, "exports")

@@ -62,10 +62,10 @@ Fetches the collections.
 #### 2. Exports
 Read `collections.json` file and initiates export requests for collections.
 
-- The operation data is saved into `fileOperationIds.json`
+- The operation data is saved into `fileOperations.json`
 
 #### 3. Download and convert
-Read `fileOperationIds.json`, check the statuses of export operations, and download the files into `/exports` directory.
+Read `fileOperations.json`, check the statuses of export operations, and download the files into `/exports` directory.
 
 - Unzip the files and converted all .md to .docx
 

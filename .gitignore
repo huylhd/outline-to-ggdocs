@@ -1,4 +1,6 @@
 .DS_Store
 collections.json
 fileOperations.json
+exportedFiles.json
+downloadedFiles.json
 exports

@@ -26,6 +26,7 @@ func main() {
 	args := os.Args[1:]
 	help := flag.Bool("help", false, "Show help")
 	flag.Parse()
+
 	if *help {
 		flag.Usage()
 		os.Exit(0)
@@ -49,6 +50,7 @@ func main() {
 	downloadCmd := flag.NewFlagSet("download", flag.ExitOnError)
 	convertCmd := flag.NewFlagSet("convert", flag.ExitOnError)
 	automateCmd := flag.NewFlagSet("automate", flag.ExitOnError)
+	fetchCmd := flag.NewFlagSet("fetchFileOperations", flag.ExitOnError)
 
 	switch args[0] {
 	case "list":
@@ -83,17 +85,29 @@ func main() {
 	case "automate":
 		page := automateCmd.Int("page", 0, "Page number, starts from 1 (leave empty to fetch all collections)")
 		fromStep := automateCmd.Int("from-step", 0, "Step to start from. 0 = list, 1 = export, 2 = download and convert")
+		toStep := automateCmd.Int("to-step", 2, "Step to end at. 0 = list, 1 = export, 2 = download and convert")
 		automateCmd.Parse(args[1:])
 
 		fromAutomateStep := cmd.AutomateStep(*fromStep)
+		toAutomateStep := cmd.AutomateStep(*toStep)
 		if fromAutomateStep < cmd.STEP_LIST || fromAutomateStep > cmd.STEP_DOWNLOAD_UNZIP_CONVERT {
 			utils.LogError("invalid from-step value")
 			os.Exit(1)
 		}
+		if toAutomateStep < cmd.STEP_LIST || toAutomateStep > cmd.STEP_DOWNLOAD_UNZIP_CONVERT {
+			utils.LogError("invalid to-step value")
+			os.Exit(1)
+		}
 
-		cmd.AutomateCommand(*page, fromAutomateStep)
+		cmd.AutomateCommand(*page, fromAutomateStep, toAutomateStep)
+
+	case "fetchFileOperations":
+		fetchCmd.Parse(args[1:])
+		cmd.FetchFileOperations()
 
 	default:
-		utils.LogError("command not found")
+		utils.LogError("unknown command")
+		flag.Usage()
+		os.Exit(1)
 	}
 }

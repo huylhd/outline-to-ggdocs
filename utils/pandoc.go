@@ -11,22 +11,27 @@ import (
 )
 
 func ConvertMarkdownToGoogleDocs(filePath string, removeMd bool, errors chan error) {
-	newFilePath := strings.Replace(filePath, ".md", ".docx", 1)
-	cmd := exec.Command("pandoc", "-f", "markdown", "-t", "docx", filePath, "-o", newFilePath)
-	cmdOutput, err := cmd.CombinedOutput()
-	if err != nil {
-		errors <- fmt.Errorf("pandoc failed: %v\nOutput: %s", err, string(cmdOutput))
-		return
-	}
+    newFilePath := strings.Replace(filePath, ".md", ".docx", 1)
+    cmd := exec.Command("pandoc", "-f", "markdown", "-t", "docx", filePath, "-o", newFilePath)
+    cmdOutput, err := cmd.CombinedOutput()
+    if err != nil {
+        errors <- fmt.Errorf("pandoc failed: %v\nOutput: %s", err, string(cmdOutput))
+        return
+    }
 
-	if removeMd {
-		if err := os.Remove(filePath); err != nil {
-			errors <- err
-			return
-		}
-	}
+    if removeMd {
+        if _, err := os.Stat(filePath); os.IsNotExist(err) {
+            errors <- fmt.Errorf("file does not exist: %s", filePath)
+            return
+        }
 
-	fmt.Println("Converted", filePath, "to", newFilePath)
+        if err := os.Remove(filePath); err != nil {
+            errors <- err
+            return
+        }
+    }
+
+    fmt.Println("Converted", filePath, "to", newFilePath)
 }
 
 func ConvertMarkdownInDirectoryToGoogleDocs(directoryPath string, removeMd bool) {

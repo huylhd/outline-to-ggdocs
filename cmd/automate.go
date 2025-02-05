@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"outline-to-ggdocs/utils"
 	"sync"
-
 	"os"
 )
 
@@ -17,14 +16,14 @@ const (
 	STEP_DOWNLOAD_UNZIP_CONVERT
 )
 
-func AutomateCommand(page int, fromStep AutomateStep) {
-	if fromStep <= STEP_LIST {
+func AutomateCommand(page int, fromStep AutomateStep, toStep AutomateStep) {
+	if fromStep <= STEP_LIST && toStep >= STEP_LIST {
 		stepList(page)
 	}
-	if fromStep <= STEP_EXPORT {
+	if fromStep <= STEP_EXPORT && toStep >= STEP_EXPORT {
 		stepExport()
 	}
-	if fromStep <= STEP_DOWNLOAD_UNZIP_CONVERT {
+	if fromStep <= STEP_DOWNLOAD_UNZIP_CONVERT && toStep >= STEP_DOWNLOAD_UNZIP_CONVERT {
 		stepDownloadAndUnzip()
 	}
 }
@@ -93,11 +92,21 @@ func stepExport() {
 		utils.LogError("no collections found in collections.json")
 		os.Exit(0)
 	}
+
+	exportedFiles := readDataFromFile("exportedFiles.json")
+	exportedCollectionIds := make(map[string]bool)
+	for _, file := range exportedFiles {
+		exportedCollectionIds[file["collectionId"].(string)] = true
+	}
+
 	var wg sync.WaitGroup
 	ch := make(chan map[string]interface{}, len(collectionsData))
 	for _, c := range collectionsData {
+		if exportedCollectionIds[c["id"].(string)] {
+			continue
+		}
 		wg.Add(1)
-		go func() {
+		go func(c map[string]interface{}) {
 			defer wg.Done()
 			data := ExportCollection(c["id"].(string))
 			fileOperationId := data["fileOperation"].(map[string]interface{})["id"].(string)
@@ -105,9 +114,18 @@ func stepExport() {
 				"id":           fileOperationId,
 				"name":         c["name"].(string),
 				"collectionId": c["id"].(string),
+				"size":         data["fileOperation"].(map[string]interface{})["size"].(string),
 			}
 			ch <- fileOperationData
-		}()
+
+			exportedFile := map[string]interface{}{
+				"collectionId": c["id"].(string),
+				"id":           fileOperationId,
+				"name":         c["name"].(string),
+				"size":         data["fileOperation"].(map[string]interface{})["size"].(string),
+			}
+			appendDataFile("exportedFiles.json", exportedFile)
+		}(c)
 	}
 
 	wg.Wait()
@@ -129,6 +147,23 @@ func stepExport() {
 	file.Write(jsonData)
 
 	utils.LogInfo("Collections export requested successfully")
+}
+
+
+
+func appendDataFile(fileName string, downloadedFile map[string]interface{}) {
+    err := utils.AppendDataToFile(fileName, downloadedFile)
+    if err != nil {
+        panic(err)
+    }
+}
+
+func readDataFromFile(fileName string) []map[string]interface{} {
+    data, err := utils.ReadDataFromFile(fileName)
+    if err != nil {
+        panic(err)
+    }
+    return data
 }
 
 func readCollectionsData() []map[string]interface{} {
@@ -159,23 +194,37 @@ func stepDownloadAndUnzip() {
 		panic(err)
 	}
 
+	targetPath := "exports"
+
 	os.Mkdir("exports", 0755)
 	var wg sync.WaitGroup
 	for _, i := range fileOperationData {
 		wg.Add(1)
 		fileId := i["id"].(string)
-		go func(fileId string) {
+		collectionId := i["collectionId"].(string)
+		name := i["name"].(string)
+		go func(fileId string, collectionId string, name string) {
 			defer wg.Done()
 			filePath, err := DownloadFile(fileId, "exports")
 			if err != nil {
 				return
 			}
-			targetPath := "exports"
 			utils.Unzip(filePath, targetPath)
-			utils.ConvertMarkdownInDirectoryToGoogleDocs(targetPath, true)
-		}(fileId)
+			
+			utils.LogInfo("Downloaded and unzipped collection: " + name)
+			downloadedFile := map[string]interface{}{
+				"fileId":       fileId,
+				"collectionId": collectionId,
+				"name":		 name,
+			}
+			appendDataFile("downloadedFiles.json", downloadedFile)
+		
+		}(fileId, collectionId, name)
 	}
 
 	wg.Wait()
+
+	// convert markdown files to google docs
+	utils.ConvertMarkdownInDirectoryToGoogleDocs(targetPath, true)
 	utils.LogInfo("All collections downloaded and converted successfully")
 }

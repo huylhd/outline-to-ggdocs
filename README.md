@@ -8,6 +8,7 @@ This tool supports listing collections, exporting them, downloading files, and c
 - `download`: Download exported file by ID.
 - `convert`: Convert all Markdown files in a directory to .docx format
 - `automate`: Automate the entire process
+- `fetch`: Retrieve all requested export files from Outline.
 
 ## Prerequisites
 ### 1. Go
